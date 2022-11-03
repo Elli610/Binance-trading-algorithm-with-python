@@ -7,7 +7,8 @@ import ccxt
 import talib
 from config import *
 import buy_sell as bs
-
+import sql
+import bollingerbands as bb
 
 # Initialize Variables
 CANDLE_DURATION_IN_MIN = candle_duration
@@ -19,8 +20,8 @@ RSI_OVERSOLD = oversold
 CCXT_TICKER_NAME = Coin.upper() + '/' + Pairing.upper()
 TRADING_TICKER_NAME = Coin.lower() + Pairing.lower()
 
-INVESTMENT_AMOUNT_DOLLARS = initial_investment
-HOLDING_QUANTITY = holding
+INVESTMENT_AMOUNT_DOLLARS = bs.get_account(Pairing.upper())
+HOLDING_QUANTITY = bs.get_account(Coin.upper())
 
 API_KEY = key
 API_SECRET = secret
@@ -45,8 +46,7 @@ def fetch_data(ticker):
     return ticker_df
 
 # COMPUTE THE TECHNICAL INDICATORS & APPLY THE TRADING STRATEGY
-def get_trade_recommendation(ticker_df):
-
+def RSI_MACD(ticker_df):
     macd_result = 'WAIT'
     final_result = 'WAIT'
 
@@ -69,7 +69,27 @@ def get_trade_recommendation(ticker_df):
             final_result = 'BUY'
         elif (float(last_rsi_values.max()) >= float(RSI_OVERBOUGHT)):
             final_result = 'SELL'
-
+            
+    return final_result
+    
+def get_trade_recommendation(ticker_df):
+    order = []
+    #RSI & MACD indicator 
+    rsimacd = RSI_MACD(ticker_df)
+    if(rsimacd != "WAIT"):
+        order.append(rsimacd) 
+    #bollinger-bands
+    bollinger = bb.bollinger_trade_logic()
+    if(bollinger != "WAIT"):
+        order.append(bollinger)
+    
+    # final choice
+    order.sort()
+    
+    if(len(order)%2 == 1):
+        final_result = order[len(order)//2]
+    else:
+        final_result = "WAIT"
     return final_result
 
 
@@ -108,54 +128,8 @@ def execute_trade(trade_rec_type, trading_ticker,value):
             
             price = current_price
     except:
-        print(f"\nALERT!!! UNABLE TO COMPLETE ORDER")
+        print("\nALERT!!! UNABLE TO COMPLETE ORDER")
 
     return order_placed, price
 
 
-def run_bot_for_ticker(ccxt_ticker, trading_ticker):
-
-    currently_holding = holding
-    current_balance = initial_investment
-    
-    while 1:
-        # FETCH THE DATA
-        ticker_data = fetch_data(ccxt_ticker)
-        
-        # min value to trade
-
-        minQty = 0.0001 #pairingInfo('BTCUSDT')['filters'][2]['minQty']
-        
-        if ticker_data is not None:
-            # COMPUTE THE TECHNICAL INDICATORS & APPLY THE TRADING STRATEGY
-            trade_rec_type = get_trade_recommendation(ticker_data)
-            print(f'{datetime.now().strftime("%d/%m/%Y %H:%M:%S")}  TRADING RECOMMENDATION: {trade_rec_type}')
-        
-            # EXECUTE THE TRADE
-            if (trade_rec_type == 'BUY' and current_balance >= 11 ) or \
-                    (trade_rec_type == 'SELL' and currently_holding >= 10.5/float(wx_client.send("ticker", { "symbol": symbol })[1]['lastPrice'])):
-                
-                trade_rec_type = 'BUY'
-                print(f'Placing {trade_rec_type} order')
-                
-                price = float(wx_client.send("ticker", { "symbol": trading_ticker })[1]['lastPrice'])
-
-                # New balances 
-                value = round(0.9 * float(currently_holding),5) if(trade_rec_type == 'BUY') else round(0.9 * float(current_balance) / price ,5)
-
-                trade_successful,price = execute_trade(trade_rec_type,trading_ticker,value)
-                
-                currently_holding = ( currently_holding + value if(trade_rec_type == 'BUY') else (currently_holding - (value / price)) )if(trade_successful) else currently_holding 
-                current_balance = ( current_balance - (value * price) if(trade_rec_type == 'BUY') else (current_balmance + value) )if(trade_successful) else current_balance
-                
-            print(" " + Coin.upper() + " balance = " + str(currently_holding))
-            print(" " + Pairing.upper() + " balance = " + str(current_balance))    
-                
-            time.sleep(CANDLE_DURATION_IN_MIN*60)
-            
-        else:
-            
-            print(f'Unable to fetch ticker data {ccxt_ticker}. Retrying in 5 seconds...')
-            time.sleep(5)
-
-run_bot_for_ticker(CCXT_TICKER_NAME,TRADING_TICKER_NAME)

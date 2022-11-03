@@ -12,9 +12,6 @@ secret = config['SETTINGS']['secret']
 Coin = config['SETTINGS']['Coin']
 Pairing = config['SETTINGS']['Pairing']
 
-initial_investment = float(config['SETTINGS']['initial_investment']) # quantité pairing
-holding = float(config['SETTINGS']['holding']) # quantité coin
-
 candle_duration = int(config['SETTINGS']['candle_duration']) #en minutes
 
 #RSI
@@ -32,3 +29,4 @@ def pairingInfo(pair):
 # obtenir infos sur une paire 
 #wx_client.send("ticker", { "symbol": 'btcusdt'})
 
+#aide : https://python-binance.readthedocs.io/en/latest/account.html
