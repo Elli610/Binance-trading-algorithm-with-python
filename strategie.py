@@ -2,13 +2,17 @@ import time
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from wazirx_sapi_client.rest import Client
+from binance.client import Client
+#from wazirx_sapi_client.rest import Client
 import ccxt
 import talib
 from config import *
 import buy_sell as bs
 import sql
-import bollingerbands as bb
+import bollingerbandsV3 as bb
+import statistics as stat
+import pattern_recognition as pr
+
 
 # Initialize Variables
 CANDLE_DURATION_IN_MIN = candle_duration
@@ -26,7 +30,7 @@ HOLDING_QUANTITY = bs.get_account(Coin.upper())
 API_KEY = key
 API_SECRET = secret
 exchange = ccxt.binance()
-wx_client = Client(api_key=API_KEY, secret_key=API_SECRET)
+client = Client(API_KEY, API_SECRET)
 
 # FETCH THE DATA
 def fetch_data(ticker):
@@ -44,6 +48,7 @@ def fetch_data(ticker):
         ticker_df['symbol'] = ticker
 
     return ticker_df
+
 
 # COMPUTE THE TECHNICAL INDICATORS & APPLY THE TRADING STRATEGY
 def RSI_MACD(ticker_df):
@@ -76,13 +81,20 @@ def get_trade_recommendation(ticker_df):
     order = []
     #RSI & MACD indicator 
     rsimacd = RSI_MACD(ticker_df)
-    if(rsimacd != "WAIT"):
+    if(active_rsi and rsimacd != "WAIT"):
         order.append(rsimacd) 
+        print("RSI + MACD : " + rsimacd)
     #bollinger-bands
     bollinger = bb.bollinger_trade_logic()
-    if(bollinger != "WAIT"):
+    if(active_bollinger and bollinger != "WAIT"):
         order.append(bollinger)
-    
+        print("Bollinger : " + bollinger)
+    #pattern recognition
+    interval = str(CANDLE_DURATION_IN_MIN if(CANDLE_DURATION_IN_MIN in [1, 3, 5, 15, 30]) else 1) + "m"
+    pattern = pr.patern_recog('1m', "1 day ago", Coin.upper() + Pairing.upper())
+    if(active_pattern != '0' and pattern != "WAIT"):
+        order.append(pattern)
+        print("PATTERN : " + pattern)
     # final choice
     order.sort()
     
@@ -90,43 +102,36 @@ def get_trade_recommendation(ticker_df):
         final_result = order[len(order)//2]
     else:
         final_result = "WAIT"
+        
     return final_result
 
 
 # EXECUTE THE TRADE
 def execute_trade(trade_rec_type, trading_ticker,value):
+    
     price = 0
-    global wx_client, HOLDING_QUANTITY
+    global client, HOLDING_QUANTITY
     order_placed = False
     side_value = 'buy' if (trade_rec_type == "BUY") else 'sell'
     try:
-        ticker_price_response = wx_client.send("ticker", { "symbol": trading_ticker})
-        if (ticker_price_response[0] in [200, 201]):
-            
-            current_price = float(ticker_price_response[1]['lastPrice'])
+        ticker_price_response = client = Client (API_KEY, API_SECRET)
+        current_price = bs.get_price(Coin.upper() + Pairing.upper())
 
-            scrip_quantity = value
-            print(f"PLACING ORDER {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}: "
-                  f"{trading_ticker}, {side_value}, Price : {current_price}, quantity : {scrip_quantity}, TimeStamp : {int(time.time() * 1000)} ")
-            
-            if(trade_rec_type == "BUY"):
-                bs.buy_coin(value)
-            elif(trade_rec_type == "SELL"):
-                bs.sell_coin(value)
-            
-            """
-            order_response = wx_client.send("create_order",
-                                        {"symbol": trading_ticker, "side": side_value, "type": "limit",
-                                         "price": current_price, "quantity": scrip_quantity,
-                                         "recvWindow": 10000, "timestamp": int(time.time() * 1000)})
-            """
-            
-            print(" ORDER PLACED")
-            #HOLDING_QUANTITY = scrip_quantity if trade_rec_type == "BUY" else HOLDING_QUANTITY
-           
-            order_placed = True
-            
-            price = current_price
+        scrip_quantity = value
+        print(f"PLACING ORDER {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}: "
+              f"{trading_ticker}, {side_value}, Price : {current_price}, quantity : {scrip_quantity}, TimeStamp : {int(time.time() * 1000)} ")
+        
+        if(trade_rec_type == "BUY"):
+            bs.buy_coin(value)
+            #a =1
+        elif(trade_rec_type == "SELL"):
+            bs.sell_coin(value)
+            #a =1
+        print(" ORDER PLACED")
+       
+        order_placed = True
+        
+        price = current_price
     except:
         print("\nALERT!!! UNABLE TO COMPLETE ORDER")
 

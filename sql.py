@@ -60,3 +60,67 @@ def readTrade(caract):
         out = cursor.fetchall()
         conn.close()            
     return out
+
+
+def generateTableWallet():
+    conn = sqlite3.connect('Databases/trading_Ledger.db') 
+    cursor = conn.cursor()
+    cursor.execute("""
+                   CREATE TABLE IF NOT EXISTS wallet (
+                       id INTEGER PRIMARY KEY,
+                       coin TEXT,
+                       timestamp INTEGER,
+                       price FLOAT ,
+                       quantityOwned FLOAT)
+                   """) 
+    conn.commit()
+    conn.close()
+
+def deleteTableWallet():
+    conn = sqlite3.connect('Databases/trading_Ledger.db') 
+    cursor = conn.cursor()
+    cursor.execute("""
+                   DROP TABLE IF EXISTS wallet
+                   """)
+    conn.commit()
+    conn.close()
+    
+    
+def addWallet(coin,timestamp,price,quantity):
+    """
+    price par rapport à l'usdt'
+    """
+    conn = sqlite3.connect('Databases/trading_Ledger.db') 
+    
+    cursor = conn.cursor()
+    
+    cursor.execute("""SELECT max(id) FROM wallet""")
+    id = 0 
+    a = cursor.fetchall()
+    if (a != [(None,)]):
+        id = int(a[0][0]) + 1
+    
+    
+    cursor.execute("""
+                   INSERT INTO wallet (id, coin, timestamp, price, quantityOwned) VALUES( ?, ?, ?, ?, ?)""", 
+                   (id,coin,timestamp,price,quantity))
+    conn.commit()
+    conn.close()
+    
+def readWallet(caract):
+    if(caract == ''):
+        conn = sqlite3.connect('Databases/trading_Ledger.db') 
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM wallet ORDER BY id" )
+        out = cursor.fetchall()
+        conn.close()
+    else:
+        caract = str(caract)
+        conn = sqlite3.connect('Databases/trading_Ledger.db') 
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM contact WHERE coin = '" + caract + "' OR timestamp = '" + caract + "'")
+        out = cursor.fetchall()
+        conn.close()            
+    return out    
+    
+    
